@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+logs/
+temp_uploads/
+output/
+data/projects/
+.env
+venv/
+.idea/
+.vscode/
+*.docx
+*.pdf
+diagnosis/

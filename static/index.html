@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Academic Assistant</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- 引入一些更好看的字体图标 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --success-color: #10b981;
+            --background-color: #f8fafc;
+            --card-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        body {
+            background-color: var(--background-color);
+            color: #1e293b;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            padding-bottom: 50px;
+        }
+
+        .main-container {
+            max-width: 900px;
+            margin: 40px auto;
+        }
+
+        .header-section {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header-title {
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 10px;
+        }
+
+        .header-subtitle {
+            color: var(--secondary-color);
+        }
+
+        .modern-card {
+            background: #fff;
+            border: none;
+            border-radius: 16px;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 24px;
+            transition: transform 0.2s;
+            overflow: hidden;
+        }
+
+        .card-header-clean {
+            background: transparent;
+            border-bottom: 1px solid #f1f5f9;
+            padding: 20px 24px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-body-clean {
+            padding: 24px;
+        }
+
+        .form-label {
+            font-weight: 500;
+            color: #334155;
+            margin-bottom: 8px;
+        }
+
+        .form-control,
+        .form-select {
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            padding: 10px 12px;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .btn-modern {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary-modern {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary-modern:hover {
+            background-color: #1d4ed8;
+            border-color: #1d4ed8;
+        }
+
+        /* 隐藏的日志窗口，但保留结构以免报错 */
+        #log-container {
+            display: none;
+        }
+
+        /* 状态指示器 */
+        .status-dot {
+            height: 10px;
+            width: 10px;
+            background-color: #cbd5e1;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        .status-dot.active {
+            background-color: var(--success-color);
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+        }
+
+        .status-dot.running {
+            background-color: var(--primary-color);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.6;
+                transform: scale(1.2);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .result-section {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .download-btn-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .download-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .download-card:hover {
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .download-icon {
+            font-size: 2rem;
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+
+        .download-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .download-meta {
+            font-size: 0.85rem;
+            color: var(--secondary-color);
+        }
+
+        /* 进度条 */
+        .progress-modern {
+            height: 8px;
+            border-radius: 4px;
+            background-color: #e2e8f0;
+            overflow: hidden;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .progress-bar-modern {
+            height: 100%;
+            background-color: var(--primary-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="main-container">
+        <div class="header-section">
+            <h1 class="header-title">AI 学术辅助系统</h1>
+            <p class="header-subtitle">专业级自动化论文生成与深度优化平台</p>
+        </div>
+
+        <!-- 配置卡片 (可折叠) -->
+        <div class="modern-card">
+            <div class="card-header-clean" data-bs-toggle="collapse" href="#configPanel" role="button"
+                aria-expanded="false" style="cursor: pointer;">
+                <span><i class="bi bi-gear-fill me-2"></i>系统配置</span>
+                <i class="bi bi-chevron-down"></i>
+            </div>
+            <div class="collapse" id="configPanel">
+                <div class="card-body-clean">
+                    <form id="configForm">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">模型来源 / Mode</label>
+                                <div class="btn-group w-100" role="group">
+                                    <input type="radio" class="btn-check" name="modelSource" id="sourceSilicon"
+                                        value="silicon" checked onchange="toggleSource()">
+                                    <label class="btn btn-outline-primary" for="sourceSilicon">Online
+                                        (SiliconFlow)</label>
+                                    <input type="radio" class="btn-check" name="modelSource" id="sourceLocal"
+                                        value="lmstudio" onchange="toggleSource()">
+                                    <label class="btn btn-outline-secondary" for="sourceLocal">Local (LM Studio)</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">模型名称 / Model Name</label>
+                                <input type="text" class="form-control" id="modelName"
+                                    value="deepseek-ai/DeepSeek-V3.2">
+                                <!-- Hidden inputs for Local mode compatibility -->
+                                <input type="hidden" id="localUrl" value="http://localhost:1234/v1">
+                                <input type="hidden" id="localModel" value="openai/gpt-oss-20b">
+                            </div>
+                        </div>
+
+                        <!-- SiliconFlow Specifics -->
+                        <div id="siliconConfig" class="mt-3">
+                            <div class="mb-3">
+                                <label class="form-label">API Key</label>
+                                <input type="password" class="form-control" id="apiKey" placeholder="sk-...">
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="form-check pt-4">
+                                        <input type="checkbox" class="form-check-input" id="enableThinking" checked>
+                                        <label class="form-check-label">启用 CoT 思维链</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Max Tokens</label>
+                                    <input type="number" class="form-control" id="maxTokens" value="4096">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Temperature</label>
+                                    <input type="number" class="form-control" id="temperature" value="0.7" step="0.1">
+                                </div>
+                                <input type="hidden" id="thinkingBudget" value="4096">
+                            </div>
+                        </div>
+
+                        <div class="mt-3 text-end">
+                            <button type="button" class="btn btn-modern btn-primary-modern"
+                                onclick="saveConfig()">保存配置</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主要任务区 -->
+        <div class="modern-card">
+            <div class="card-header-clean">
+                <span><i class="bi bi-file-earmark-text-fill me-2"></i>创建新论文任务</span>
+                <span id="systemStatus"><span class="status-dot"></span>就绪</span>
+            </div>
+            <div class="card-body-clean">
+                <!-- 步骤1：输入信息 -->
+                <div id="step1-section">
+                    <div class="mb-4">
+                        <label class="form-label">论文题目</label>
+                        <input type="text" class="form-control form-control-lg" id="projectTitle"
+                            placeholder="请输入您的论文题目..." required>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label">核心思路 / 关键词</label>
+                        <textarea class="form-control" id="projectIdea" rows="4"
+                            placeholder="请简要描述您的研究思路、核心观点，或直接粘贴关键词..."></textarea>
+                    </div>
+
+                    <!-- 文件上传区域 (折叠) -->
+                    <div class="mb-4 p-3 bg-light rounded-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label mb-0"><i class="bi bi-paperclip me-1"></i>资料上传 (可选)</label>
+                            <small class="text-muted">如果不上传，系统将自动使用联网检索</small>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <input type="file" class="form-control" id="literatureFile" accept=".txt">
+                                <small class="text-muted d-block mt-1">上传 .txt 格式的基础文献池</small>
+                            </div>
+                            <div class="col-md-6">
+                                <input type="file" class="form-control" id="pdfFiles" accept=".pdf" multiple>
+                                <small class="text-muted d-block mt-1">上传 .pdf 参考文档</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-modern btn-primary-modern w-100 py-3 fs-5"
+                        onclick="startFullProcess()" id="startBtn">
+                        <i class="bi bi-rocket-takeoff-fill me-2"></i>开始生成论文
+                    </button>
+
+                    <!-- 进度条 -->
+                    <div class="progress-modern" id="progressBar">
+                        <div class="progress-bar-modern" style="width: 100%"></div>
+                    </div>
+                    <p class="text-center text-muted mt-2" id="statusText" style="display:none;font-size:0.9rem;">
+                        正在初始化...</p>
+                </div>
+
+                <!-- 结果区域 -->
+                <div id="result-section" style="display:none;" class="result-section">
+                    <h4 class="mb-3 text-success"><i class="bi bi-check-circle-fill me-2"></i>生成完成</h4>
+                    <p class="text-muted mb-4">您的论文已生成完毕，提供两个版本下载：</p>
+
+                    <div class="download-btn-group">
+                        <div class="download-card" onclick="downloadV1()">
+                            <div class="download-icon"><i class="bi bi-file-earmark-word"></i></div>
+                            <div class="download-title">下载标准版 (V1)</div>
+                            <div class="download-meta">经过专家审稿优化</div>
+                        </div>
+                        <div class="download-card" onclick="downloadV2()">
+                            <div class="download-icon"><i class="bi bi-file-earmark-plus"></i></div>
+                            <div class="download-title">下载深度扩充版 (V2)</div>
+                            <div class="download-meta">全文扩写，详细丰富</div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 pt-3 border-top">
+                        <button class="btn btn-link text-decoration-none text-secondary" onclick="openFolder()"><i
+                                class="bi bi-folder me-1"></i>打开所在文件夹</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 隐藏的日志容器，用于JS逻辑兼容 -->
+        <div id="log-container"></div>
+        <div id="step1-card"></div>
+        <div id="step2-card"></div>
+        <div id="step3-card"></div>
+        <div id="resultCard"></div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentProjectId = null;
+        let currentTaskId = null;
+        let logInterval = null;
+        let resultPaths = {}; // Store {v1: 'path', v2: 'path'}
+
+        window.onload = async function () {
+            // Load Config
+            try {
+                const res = await fetch('/api/config/all');
+                const data = await res.json();
+                if (data.success) {
+                    const cfg = data.config;
+                    if (cfg.default_mode === 'lmstudio') {
+                        document.getElementById('sourceLocal').click();
+                    }
+                    if (cfg.silicon.model) document.getElementById('modelName').value = cfg.silicon.model;
+                }
+            } catch (e) { }
+        }
+
+        function toggleSource() {
+            const isLocal = document.getElementById('sourceLocal').checked;
+            document.getElementById('siliconConfig').style.display = isLocal ? 'none' : 'block';
+        }
+
+        async function saveConfig() {
+            // Simplified save logic
+            const isLocal = document.getElementById('sourceLocal').checked;
+            const config = {
+                mode: isLocal ? 'lmstudio' : 'silicon',
+                api_key: document.getElementById('apiKey').value,
+                silicon_model: document.getElementById('modelName').value,
+                enable_thinking: document.getElementById('enableThinking').checked,
+                temperature: parseFloat(document.getElementById('temperature').value),
+                max_tokens: parseInt(document.getElementById('maxTokens').value),
+                local_url: document.getElementById('localUrl').value,
+                local_model: document.getElementById('localModel').value
+            };
+
+            await fetch('/api/config/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+            alert('配置已保存');
+        }
+
+        // Integrated Flow: Create Project -> Upload (if any) -> Generate
+        async function startFullProcess() {
+            const title = document.getElementById('projectTitle').value;
+            const idea = document.getElementById('projectIdea').value;
+
+            if (!title) { alert('请输入论文题目'); return; }
+
+            // UI State Update
+            const btn = document.getElementById('startBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>正在处理...';
+            document.getElementById('progressBar').style.display = 'block';
+            document.getElementById('statusText').style.display = 'block';
+            document.getElementById('statusText').innerText = "正在创建项目...";
+
+            // 1. Create Project
+            try {
+                const res1 = await fetch('/api/projects/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: title, idea: idea })
+                });
+                const d1 = await res1.json();
+                if (!d1.success) throw new Error(d1.error);
+
+                currentProjectId = d1.project_id;
+
+                // 2. Upload Files (if selected)
+                const litFile = document.getElementById('literatureFile').files[0];
+                const pdfFiles = document.getElementById('pdfFiles').files;
+
+                if (litFile || pdfFiles.length > 0) {
+                    document.getElementById('statusText').innerText = "正在上传资料...";
+                    const formData = new FormData();
+                    if (litFile) formData.append('literature_file', litFile);
+                    for (let i = 0; i < pdfFiles.length; i++) formData.append('pdf_files', pdfFiles[i]);
+
+                    await fetch(`/api/projects/${currentProjectId}/upload`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                }
+
+                // 3. Start Generation
+                document.getElementById('statusText').innerText = "AI正在撰写论文 (请稍候，可能需要几分钟)...";
+                document.getElementById('systemStatus').innerHTML = '<span class="status-dot running"></span>运行中';
+
+                const res3 = await fetch('/api/generate_ex', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        project_id: currentProjectId,
+                        extra_idea: idea
+                    })
+                });
+                const d3 = await res3.json();
+                if (!d3.success) throw new Error(d3.error);
+
+                currentTaskId = d3.task_id;
+                startPolling();
+
+            } catch (e) {
+                alert('错误: ' + e.message);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-rocket-takeoff-fill me-2"></i>开始生成论文';
+                document.getElementById('progressBar').style.display = 'none';
+                document.getElementById('statusText').style.display = 'none';
+            }
+        }
+
+        function startPolling() {
+            logInterval = setInterval(async () => {
+                if (!currentTaskId) return;
+                try {
+                    const res = await fetch(`/api/task_status/${currentTaskId}`);
+                    const data = await res.json();
+
+                    if (data.success) {
+                        // Update status text based on last log
+                        if (data.logs && data.logs.length > 0) {
+                            const lastLog = data.logs[data.logs.length - 1];
+                            // Simple filter to show meaningful status
+                            if (lastLog.includes("步骤") || lastLog.includes("正在")) {
+                                document.getElementById('statusText').innerText = lastLog.substring(lastLog.indexOf('-') + 1).trim();
+                            }
+                        }
+
+                        if (data.status === 'completed') {
+                            clearInterval(logInterval);
+                            finishSuccess(data);
+                        } else if (data.status === 'failed') {
+                            clearInterval(logInterval);
+                            alert('生成失败: ' + data.error);
+                            resetUI();
+                        }
+                    }
+                } catch (e) { }
+            }, 3000);
+        }
+
+        function finishSuccess(data) {
+            document.getElementById('progressBar').style.display = 'none';
+            document.getElementById('statusText').style.display = 'none';
+            document.getElementById('startBtn').style.display = 'none'; // Hide start button
+            document.getElementById('result-section').style.display = 'block'; // Show result
+            document.getElementById('systemStatus').innerHTML = '<span class="status-dot active"></span>完成';
+
+            // Store results
+            // Expecting data.output_result to be a dict {'v1':..., 'v2':...}
+            if (data.output_result && typeof data.output_result === 'object') {
+                resultPaths = data.output_result;
+            } else if (typeof data.output_result === 'string') {
+                // Fallback for old style (single path V2)
+                resultPaths = { 'v2': data.output_result, 'v1': data.output_result.replace('_深度扩充版', '_标准版').replace('_V2', '_V1') };
+            }
+        }
+
+        function getFilename(path) {
+            if (!path) return "";
+            return path.split(/[/\\]/).pop();
+        }
+
+        function downloadV1() {
+            if (!resultPaths.v1) { alert('未找到V1版本文件'); return; }
+            const fname = getFilename(resultPaths.v1);
+            window.location.href = `/api/download/${currentProjectId}/${fname}`;
+        }
+
+        function downloadV2() {
+            if (!resultPaths.v2) { alert('未找到V2版本文件'); return; }
+            const fname = getFilename(resultPaths.v2);
+            window.location.href = `/api/download/${currentProjectId}/${fname}`;
+        }
+
+        function openFolder() {
+            fetch(`/api/open_folder/${currentProjectId}`);
+        }
+
+        function resetUI() {
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('startBtn').innerHTML = '<i class="bi bi-rocket-takeoff-fill me-2"></i>开始生成论文';
+            document.getElementById('progressBar').style.display = 'none';
+        }
+    </script>
+</body>
+
+</html>
+</body>
+
+</html>

@@ -1,0 +1,31 @@
+# 核心依赖
+pyyaml
+python-dotenv
+requests
+
+# 大模型相关
+# ollama使用HTTP API，无需额外包
+
+# 语义检索
+sentence-transformers
+faiss-cpu
+numpy
+
+# 数据分析
+pandas
+statsmodels
+matplotlib
+seaborn
+
+# 文档处理
+python-docx
+markdown
+PyPDF2  # PDF解析
+
+# Web API（可选）
+flask
+flask-cors
+
+# 工具库
+tqdm
+loguru

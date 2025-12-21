@@ -1,0 +1,71 @@
+citation:
+  diversity_weight: 0.3
+  max_per_paragraph: 15
+  min_per_paragraph: 5
+  similarity_threshold: 0.6
+  target_per_sentence: 3
+expert_review:
+  enabled: true
+  experts:
+  - focus: innovation
+    name: 创新点专家
+  - focus: logic
+    name: 逻辑专家
+  - focus: accuracy
+    name: 准确性专家
+  - focus: norm
+    name: 规范性专家
+  - focus: integration
+    name: 整合专家
+literature:
+  external_search:
+    enabled: true
+    mode: searxng
+    results_per_query: 30
+    searxng_url: http://localhost:8080
+    trigger_threshold: 0.8
+    zhipu_api_key: ''
+  pool_path: data/literature_pool.txt
+  projects_base_dir: data/projects
+  use_project_manager: true
+logging:
+  level: INFO
+  path: logs/generation.log
+model_routing:
+  default: silicon
+  lmstudio:
+    base_url: http://localhost:1234/v1
+    model: openai/gpt-oss-20b
+  routing_rules:
+    local_nodes: []
+    online_nodes: []
+  silicon:
+    api_key: sk-ijwlfxmabhwlfllgofhuebhoceupyjegqsvhglprtzfzberm
+    base_url: https://api.siliconflow.cn/v1/chat/completions
+    enable_thinking: true
+    frequency_penalty: 0.5
+    max_tokens: 32768
+    min_p: 0.05
+    model: deepseek-ai/DeepSeek-V3.2
+    n: 1
+    temperature: 0.7
+    thinking_budget: 4096
+    top_k: 50
+    top_p: 0.7
+output:
+  format: markdown
+  path: output/论文初稿.md
+project:
+  keywords: 人工智能, 伦理, 算法偏见
+  title: 人工智能伦理问题研究
+quality_metrics:
+  enabled: true
+  report_path: output/quality_report.json
+reference_documents:
+  enabled: true
+  max_snippets_per_query: 3
+  pdf_folder: data/reference_pdfs
+  snippet_length: 500
+template:
+  path: templates/theoretical_paper.yaml
+  type: theoretical

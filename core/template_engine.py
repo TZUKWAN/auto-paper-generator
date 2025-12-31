@@ -742,6 +742,8 @@ class TemplateEngine:
                 # 简单清洗
                 if expanded_para:
                     clean_para = expanded_para.replace('首先', '').replace('其次', '').replace('**', '')
+                    # [*] 清理AI可能编造的虚假引用
+                    clean_para = self._remove_fake_citations(clean_para)
                     expanded_paragraphs.append(clean_para)
                 else:
                     expanded_paragraphs.append(para)
@@ -1057,6 +1059,11 @@ class TemplateEngine:
             logger.info("参考文献 - 验证同步完成")
         
         result = '\n\n'.join(optimized_parts)
+        
+        # [*] 新增：验证并修复引用分布（修复超限编号和过度复用问题）
+        if hasattr(self, 'citation_mgr') and self.citation_mgr:
+            result = self.citation_mgr.validate_and_fix_distribution(result)
+        
         logger.info(f"V2优化完成: {original_length}字 -> {len(result)}字")
         
         return result
@@ -1116,6 +1123,8 @@ class TemplateEngine:
                 
                 if 0.7 <= ratio <= 100.0 and not has_english and not has_lazy and result:
                     logger.info(f"    [OK] 优化成功 ({original_length}字 -> {result_length}字)")
+                    # [*] 清理AI可能编造的虚假引用
+                    result = self._remove_fake_citations(result)
                     return result
                 else:
                     logger.warning(f"    [FAIL] 尝试{attempt}失败 (比例={ratio:.1f}, 英文={has_english}, 占位符={has_lazy})")
@@ -1167,6 +1176,8 @@ class TemplateEngine:
             result = self._clean_ai_artifacts(result)
             
             if result and len(result) > 500:
+                # [*] 清理AI可能编造的虚假引用
+                result = self._remove_fake_citations(result)
                 return result
             return None
             
@@ -1620,6 +1631,11 @@ class TemplateEngine:
             logger.info("参考文献 - 验证同步完成")
         
         result = '\n\n'.join(expanded_parts)
+        
+        # [*] 新增：验证并修复引用分布（修复超限编号和过度复用问题）
+        if hasattr(self, 'citation_mgr') and self.citation_mgr:
+            result = self.citation_mgr.validate_and_fix_distribution(result)
+        
         logger.info(f"V3扩写完成: {original_length}字 -> {len(result)}字")
         
         return result

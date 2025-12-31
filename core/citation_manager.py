@@ -63,6 +63,10 @@ class CitationManager:
         # 每个二级标题最多使用章节配额的33%
         self.subsection_max_ratio = 0.34  # 略大于33%以处理取整
         
+        # [*] 引用复用控制：跟踪每个引用的使用次数
+        self.citation_usage_count = {}  # {citation_num: usage_count}
+        self.max_citation_reuse = 2  # 每条引用最多使用2次（初次+1次复用）
+        
         logger.info(f"引用配额系统: 总计{total}条, 引言{intro_quota}, 章节1-3各{chapter_quota}, 结论0")
     
     def set_current_section(self, section_type, chapter_idx=0, subsection_idx=0):
@@ -229,13 +233,24 @@ class CitationManager:
             lit['used'] = True
             used_lits.append(lit)
         
-        # [*] 如果没有添加新引用且已有引用可复用，随机选择1-2个已有引用
+        # [*] 如果没有添加新引用且已有引用可复用，选择使用次数最少的引用（限制复用次数）
         if not citation_nums and self.citation_tracker:
-            import random
-            existing_nums = list(self.citation_tracker.values())
-            reuse_count = min(2, len(existing_nums))
-            citation_nums = random.sample(existing_nums, reuse_count)
-            logger.debug(f"复用已有引用: {citation_nums}")
+            # 筛选未达到最大复用次数的引用
+            candidates = [
+                num for num in self.citation_tracker.values()
+                if self.citation_usage_count.get(num, 1) < self.max_citation_reuse
+            ]
+            if candidates:
+                # 优先选择使用次数最少的引用
+                candidates.sort(key=lambda n: self.citation_usage_count.get(n, 1))
+                selected_num = candidates[0]
+                citation_nums = [selected_num]
+                # 更新使用次数
+                self.citation_usage_count[selected_num] = self.citation_usage_count.get(selected_num, 1) + 1
+                logger.debug(f"复用引用 [{selected_num}]（第{self.citation_usage_count[selected_num]}次使用）")
+            else:
+                # 所有引用都已达到复用上限，不添加任何引用
+                logger.debug(f"所有引用已达复用上限({self.max_citation_reuse}次)，本句不添加引用")
         
         # 插入引用
         # 预处理：去掉骨架句末尾标点（包括可能的多余标点）
@@ -425,3 +440,95 @@ class CitationManager:
             {lit_id: citation_num, ...}
         """
         return dict(self.citation_tracker)
+    
+    def validate_and_fix_distribution(self, text, max_reuse=None):
+        """
+        验证并修复文本中的引用分布
+        
+        解决两个问题：
+        1. 超限引用编号（超过 max_total_citations）
+        2. 单个引用使用次数过多（超过 max_reuse）
+        
+        Args:
+            text: 要验证的论文正文
+            max_reuse: 每个引用最大使用次数，默认使用 self.max_citation_reuse
+            
+        Returns:
+            修复后的文本
+        """
+        import re
+        
+        if not text:
+            return text
+        
+        if max_reuse is None:
+            max_reuse = self.max_citation_reuse
+        
+        max_valid_num = self.max_total_citations
+        valid_tracker_nums = set(self.citation_tracker.values())
+        
+        # 1. 找出所有引用及其位置
+        citation_positions = {}  # {num: [(start, end), ...]}
+        for match in re.finditer(r'\[(\d+)\]', text):
+            num = int(match.group(1))
+            if num not in citation_positions:
+                citation_positions[num] = []
+            citation_positions[num].append((match.start(), match.end()))
+        
+        # 2. 收集要移除的位置
+        positions_to_remove = []
+        issues_found = {
+            'over_limit': [],      # 超限编号
+            'untracked': [],       # 未追踪编号
+            'over_reuse': []       # 过度复用
+        }
+        
+        for num, positions in citation_positions.items():
+            # 检查是否超限编号
+            if num > max_valid_num:
+                logger.warning(f"发现超限引用 [{num}]（最大允许 {max_valid_num}），将全部移除")
+                positions_to_remove.extend(positions)
+                issues_found['over_limit'].append(num)
+                continue
+            
+            # 检查是否不在 tracker 中
+            if num not in valid_tracker_nums:
+                logger.warning(f"发现未追踪引用 [{num}]，将全部移除")
+                positions_to_remove.extend(positions)
+                issues_found['untracked'].append(num)
+                continue
+            
+            # 检查使用次数是否超限
+            if len(positions) > max_reuse:
+                excess_count = len(positions) - max_reuse
+                logger.warning(f"引用 [{num}] 使用了 {len(positions)} 次（超限 {excess_count} 次），移除多余的")
+                # 保留前 max_reuse 个，移除后面的
+                positions_to_remove.extend(positions[max_reuse:])
+                issues_found['over_reuse'].append((num, len(positions)))
+        
+        # 3. 按位置降序排序并移除（从后向前以保持索引正确）
+        positions_to_remove.sort(key=lambda x: x[0], reverse=True)
+        
+        result = text
+        for start, end in positions_to_remove:
+            result = result[:start] + result[end:]
+        
+        # 4. 清理可能留下的多余空格和标点问题
+        result = re.sub(r'  +', ' ', result)
+        result = re.sub(r' 。', '。', result)
+        result = re.sub(r' ，', '，', result)
+        result = re.sub(r'。。', '。', result)
+        
+        # 5. 日志汇总
+        if positions_to_remove:
+            logger.info(f"引用分布验证: 移除了 {len(positions_to_remove)} 处不合规引用")
+            if issues_found['over_limit']:
+                logger.info(f"  - 超限编号: {issues_found['over_limit']}")
+            if issues_found['untracked']:
+                logger.info(f"  - 未追踪编号: {issues_found['untracked']}")
+            if issues_found['over_reuse']:
+                logger.info(f"  - 过度复用: {[(f'[{n}]使用{c}次' ) for n, c in issues_found['over_reuse']]}")
+        else:
+            logger.info("引用分布验证: 全部引用符合规范")
+        
+        return result

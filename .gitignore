@@ -1,14 +1,52 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+
+# Logs
 *.log
 logs/
-temp_uploads/
 
+# Virtual environments
 .env
+.venv/
 venv/
+ENV/
+
+# IDE
 .idea/
 .vscode/
+*.swp
+*.swo
+
+# Generated outputs
+temp_uploads/
+output/
+diagnosis/
 *.docx
 *.pdf
-diagnosis/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.exe
+*.spec.bak
+
+# Data files (keep structure but not content)
+data/projects/
+data/temp/
+
+# Sensitive configs
+config.yaml
+
+# Claude/Agent specific
+.claude/

@@ -1,7 +1,7 @@
 citation:
   diversity_weight: 0.3
   max_per_paragraph: 15
-  max_total: 15
+  max_total: 20
   min_per_paragraph: 5
   similarity_threshold: 0.6
   target_per_sentence: 3
@@ -62,7 +62,7 @@ model_routing:
       temperature: 0.7
       top_p: 0.7
     siliconflow:
-      api_key: ''
+      api_key: sk-ijwlfxmabhwlfllgofhuebhoceupyjegqsvhglprtzfzberm
       base_url: https://api.siliconflow.cn/v1
       enable_thinking: false
       enabled: true

@@ -1,11 +1,12 @@
 citation:
   diversity_weight: 0.3
   max_per_paragraph: 15
+  max_total: 15
   min_per_paragraph: 5
   similarity_threshold: 0.6
   target_per_sentence: 3
 expert_review:
-  enabled: true
+  enabled: false
   experts:
   - focus: innovation
     name: 创新点专家
@@ -17,47 +18,97 @@ expert_review:
     name: 规范性专家
   - focus: integration
     name: 整合专家
+  max_rounds: 1
+  target_score: 85
 literature:
-  external_search:
-    enabled: true
-    mode: searxng
-    results_per_query: 30
-    searxng_url: http://localhost:8080
-    trigger_threshold: 0.8
-    zhipu_api_key: ''
   pool_path: data/literature_pool.txt
   projects_base_dir: data/projects
   use_project_manager: true
+  web_search:
+    crawl_count: 3
+    enabled: false
+    headless: true
+    mode: standard
+    results_per_query: 3
 logging:
   level: INFO
   path: logs/generation.log
 model_routing:
-  default: silicon
-  lmstudio:
-    base_url: http://localhost:1234/v1
-    model: openai/gpt-oss-20b
-  routing_rules:
-    local_nodes: []
-    online_nodes: []
-  silicon:
-    api_key: sk-ijwlfxmabhwlfllgofhuebhoceupyjegqsvhglprtzfzberm
-    base_url: https://api.siliconflow.cn/v1/chat/completions
-    enable_thinking: true
-    frequency_penalty: 0.5
-    max_tokens: 32768
-    min_p: 0.05
-    model: deepseek-ai/DeepSeek-V3.2
-    n: 1
-    temperature: 0.7
-    thinking_budget: 4096
-    top_k: 50
-    top_p: 0.7
+  default_provider: siliconflow
+  providers:
+    deepseek:
+      api_key: ''
+      base_url: https://api.deepseek.com/v1
+      enabled: true
+      frequency_penalty: 0.5
+      max_tokens: 100000
+      models:
+      - deepseek-chat
+      - deepseek-coder
+      rate_limit_seconds: 0
+      temperature: 0.7
+      top_p: 0.7
+    openai:
+      api_key: ''
+      base_url: https://api.openai.com/v1
+      enabled: true
+      frequency_penalty: 0.5
+      max_tokens: 100000
+      models:
+      - gpt-4o
+      - gpt-4-turbo
+      - gpt-3.5-turbo
+      rate_limit_seconds: 0
+      temperature: 0.7
+      top_p: 0.7
+    siliconflow:
+      api_key: ''
+      base_url: https://api.siliconflow.cn/v1
+      enable_thinking: false
+      enabled: true
+      frequency_penalty: 0.5
+      max_tokens: 100000
+      min_p: 0.05
+      models:
+      - Qwen/Qwen3-30B-A3B
+      rate_limit_seconds: 0
+      temperature: 0.7
+      thinking_budget: 1000
+      top_k: 50
+      top_p: 0.7
+    tongyi:
+      api_key: ''
+      base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      enabled: true
+      frequency_penalty: 0.5
+      max_tokens: 100000
+      models:
+      - qwen-max
+      - qwen-plus
+      rate_limit_seconds: 0
+      temperature: 0.7
+      top_p: 0.7
+    zhipuai:
+      api_key: ''
+      base_url: https://open.bigmodel.cn/api/paas/v4
+      enabled: true
+      frequency_penalty: 0.5
+      max_tokens: 100000
+      models:
+      - glm-4.6V-flash
+      rate_limit_seconds: 0
+      temperature: 0.7
+      top_p: 0.7
 output:
   format: markdown
   path: output/论文初稿.md
 project:
-  keywords: 人工智能, 伦理, 算法偏见
-  title: 人工智能伦理问题研究
+  example:
+    idea: ''
+    title: ''
+  idea: ''
+  keywords: ''
+  title: ''
 quality_metrics:
   enabled: true
   report_path: output/quality_report.json
@@ -66,6 +117,33 @@ reference_documents:
   max_snippets_per_query: 3
   pdf_folder: data/reference_pdfs
   snippet_length: 500
+stage_models:
+  content:
+    enable_thinking: false
+    model: Qwen/Qwen3-30B-A3B
+    note: 正文内容生成
+    provider: siliconflow
+    temperature: 0.7
+  enabled: false
+  expansion:
+    enable_thinking: false
+    model: Qwen/Qwen3-30B-A3B
+    note: 扩写需要更高创造性
+    provider: siliconflow
+    temperature: 0.8
+  outline:
+    enable_thinking: false
+    model: Qwen/Qwen3-30B-A3B
+    note: 大纲快速生成
+    provider: siliconflow
+    temperature: 0.7
+  review:
+    enable_thinking: true
+    model: deepseek-ai/DeepSeek-V3
+    note: 专家审稿需要深度思考
+    provider: siliconflow
+    temperature: 0.5
+    thinking_budget: 8000
 template:
   path: templates/theoretical_paper.yaml
   type: theoretical

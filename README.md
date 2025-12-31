@@ -1,29 +1,28 @@
-# 自动化论文生成系统
+# 自动化论文生成系统（纯线上版）
 
 ## 项目简介
 
-这是一个**模板驱动的哲学社科论文自动写作流水线**，支持理论论文和实证论文两种模式。系统通过智能文献管理、高密度引用策略和可扩展的分析插件，实现从配置到初稿的全自动化生成。
+这是一个**模板驱动的哲学社科理论论文自动写作流水线**。系统通过智能文献管理、高密度引用策略，实现从配置到初稿的全自动化生成。
+
+**纯线上版本**：完全依赖在线大模型API，无需配置本地模型。
 
 ## 核心特性
 
-- ✅ **双模板系统**：理论论文模板 + 实证论文模板
-- ✅ **混合大模型路由**：本地LM Studio + 在线硅基流动API
-- ✅ **智能文献管理**：TXT文献池解析、FAISS语义检索、严格去重
-- ✅ **高密度引用**：不重复引用 + 尽可能多引用策略
-- ✅ **外部检索补充**：SearXNG本地搜索 / 智谱AI搜索
-- ✅ **实证分析自动化**：可扩展插件系统（描述统计、回归、稳健性等）
-- ✅ **动态章节处理**：AI设计框架后分别展开详细内容
-- ✅ **质量审计**：引用密度、达标情况、文献余额统计
-- ⭐ **5专家AI审稿**：创新/逻辑/准确/规范/整合，≥90分停止优化
-- ⭐ **项目级文献池**：每个论文独立管理文献和PDF
+- **理论论文模板**：专注于理论研究的论文生成
+- **在线大模型路由**：支持硅基流动、智谱AI、通义千问等多个API
+- **智能文献管理**：TXT文献池解析、FAISS语义检索、严格去重
+- **高密度引用**：不重复引用 + 尽可能多引用策略
+- **外部检索补充**：SearXNG本地搜索 / 智谱AI搜索
+- **动态章节处理**：AI设计框架后分别展开详细内容
+- **质量审计**：引用密度、达标情况、文献余额统计
+- **5专家AI审稿**：创新/逻辑/准确/规范/整合，≥90分停止优化
+- **项目级文献池**：每个论文独立管理文献和PDF
 
 ## 技术栈
 
 - **Python 3.8+**
-- **本地大模型**：LM Studio（OpenAI兼容API）
-- **在线大模型**：硅基流动API
+- **在线大模型**：硅基流动API（默认）、智谱AI、通义千问等
 - **语义检索**：Sentence-Transformers + FAISS
-- **数据分析**：Pandas, Statsmodels, Matplotlib
 - **文档处理**：python-docx
 
 ## 项目结构
@@ -32,8 +31,7 @@
 自动化论文脚本/
 ├── config.yaml                  # 主配置文件
 ├── templates/                   # 模板库
-│   ├── theoretical_paper.yaml   # 理论论文模板
-│   └── empirical_paper.yaml     # 实证论文模板
+│   └── theoretical_paper.yaml   # 理论论文模板
 ├── data/                        # 数据目录
 │   └── projects/                # 项目文件夹（每个论文独立）
 │       └── 20251220_项目名/
@@ -42,7 +40,7 @@
 │           └── output/          # 输出文件
 ├── core/                        # 核心模块
 │   ├── template_engine.py       # 模板引擎
-│   ├── model_router.py          # 大模型路由（LM Studio + 硅基流动）
+│   ├── model_router.py          # 大模型路由
 │   ├── literature_parser.py     # 文献解析器
 │   ├── semantic_retriever.py    # 语义检索
 │   ├── citation_manager.py      # 引用管理器
@@ -50,7 +48,6 @@
 │   ├── pdf_reference.py         # PDF参考管理
 │   └── project_manager.py       # 项目管理器
 ├── main.py                      # 主程序
-├── web_api.py                   # Web API服务器
 └── requirements.txt             # 依赖包
 ```
 
@@ -68,69 +65,71 @@ source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 ```
 
-### 2. 配置LM Studio本地模型
+### 2. 配置API密钥
 
-1. 下载并安装 [LM Studio](https://lmstudio.ai/)
-2. 在LM Studio中下载模型（推荐：Qwen2.5-7B-Instruct或类似模型）
-3. 启动本地服务器（默认端口1234）
-4. 确保服务运行在 `http://localhost:1234`
+编辑 `config.yaml`，配置在线API密钥：
+
+```yaml
+model_routing:
+  default_provider: siliconflow
+  providers:
+    siliconflow:
+      enabled: true
+      api_key: "你的API密钥"
+      base_url: "https://api.siliconflow.cn/v1"
+```
+
+支持的API提供商：
+- 硅基流动（默认）
+- 智谱AI
+- 通义千问
+- DeepSeek
+- OpenAI
 
 ### 3. 准备文献池
 
-在前端上传或直接创建 TXT 文件，格式：
+创建 TXT 文件，格式如下：
+
 ```
 [1]作者1, 作者2. 文章标题[J]. 期刊名, 年份, (卷期): 页码. 摘要:这里是摘要内容...
 [2]作者3. 另一篇文章[J]. 期刊名2, 年份, (卷期): 页码. 摘要:这里是摘要...
 ```
 
+建议准备100+条文献以获得更好的效果。
+
 ### 4. 配置项目
 
 编辑 `config.yaml`：
+
 ```yaml
 project:
-  title: "人工智能伦理问题研究"
-  keywords: "人工智能, 伦理, 算法偏见"
-
-model_routing:
-  default: "lmstudio"
-  lmstudio:
-    base_url: "http://localhost:1234/v1"
-    model: "local-model"
+  title: "红色文化中的生态基因传承与中国式现代化生态观建构研究"
+  keywords: "红色文化, 生态基因, 中国式现代化, 生态观, 传承与建构"
 ```
 
 ### 5. 运行生成
 
 ```bash
-# 命令行模式
 python main.py \
-  --project "AI伦理研究" \
-  --literature "path/to/literature.txt"
-
-# 或启动Web API
-python web_api.py
+  --project "红色文化中的生态基因传承与中国式现代化生态观建构研究" \
+  --literature "data/literature_pool.txt"
 ```
 
-## 使用说明
+## 输出说明
 
-### 理论论文模式
+系统会生成三个版本的论文：
 
-1. 选择理论论文模板
-2. 配置研究主题和关键词
-3. 准备文献池（建议100+条）
-4. 系统自动生成包含高密度引用的论文初稿
+1. **V1初稿版**：经过专家审稿的基础版本
+2. **V2标准版**：清理AI痕迹、规范正文
+3. **V3扩写版**：内容丰富化、更加详细
 
-### 实证论文模式
-
-1. 选择实证论文模板
-2. 准备原始数据（CSV/Excel）
-3. 配置分析计划（选择插件）
-4. 系统自动完成数据分析并生成论文
+每个版本都会导出 Markdown 和 Word 两种格式。
 
 ## 高级特性
 
 ### 动态章节处理
 
-类似商业计划书的产品功能模块，论文模板也支持动态章节：
+论文模板支持动态章节展开：
 
 **示例：研究维度动态展开**
 ```yaml
@@ -139,7 +138,7 @@ sections:
     prompt: "请提出本研究的4个核心研究维度"
     dynamic: true
     expand_count: 4
-    
+
   - id: "dimension_detail_template"
     prompt: "详细阐述该研究维度的理论基础、关键问题和文献支撑"
     is_template: true
@@ -163,16 +162,30 @@ citation:
 ### 外部检索补充
 
 当文献池不足时自动触发：
+
 ```yaml
 external_search:
   enabled: true
-  mode: "searxng"  # 或 "zhipu"
-  trigger_threshold: 0.8
+  mode: "deep"
+  results_per_query: 10
 ```
+
+### 5专家审稿系统
+
+系统会自动进行多轮审稿优化：
+
+- 专家1：创新点评估
+- 专家2：逻辑性评估
+- 专家3：准确性评估
+- 专家4：规范性评估
+- 专家5：整合建议
+
+直到综合评分达到目标分数（默认90分）或达到最大轮次。
 
 ## 质量报告
 
 生成完成后，系统会输出 `quality_report.json`：
+
 ```json
 {
   "total_citations": 156,
@@ -180,24 +193,16 @@ external_search:
   "citations_per_sentence": 2.1,
   "target_met": true,
   "unused_literature_count": 23,
-  "external_search_triggered": false,
-  "threshold_rejections": 12
+  "word_count_v1": 15000,
+  "word_count_v2": 18000,
+  "word_count_v3": 25000
 }
 ```
 
-## 开发计划
-
-- [x] 项目架构设计
-- [x] 核心模块实现
-- [x] 模板系统
-- [x] 混合模型路由 (SiliconFlow/RedPlan)
-- [x] 核心算法优化 (Expert Review)
-- [x] Web界面 (Modern UI + Dual Download)
-- [ ] 实证分析插件
-- [ ] 协同编辑
-
 ## 许可证
+
 仅供学习研究使用
 
 ## 联系方式
+
 如有问题请提Issue

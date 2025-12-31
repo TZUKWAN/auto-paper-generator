@@ -1,7 +1,13 @@
-"""主程序 - 自动化论文生成（项目级文献池版本）"""
+"""主程序 - 自动化论文生成（重构版）
+重构内容：
+- 移除PDF参考功能
+- 添加outline_data参数支持
+- 分章节MD文件生成
+"""
 import sys
 import json
 import os
+import re
 from config import config
 from utils.logger import setup_logging
 from core.literature_parser import LiteratureParser
@@ -10,7 +16,6 @@ from core.model_router import ModelRouter
 from core.citation_manager import CitationManager
 from core.template_engine import TemplateEngine
 from core.expert_review import ExpertReviewSystem
-from core.pdf_reference import PDFReferenceManager
 from core.project_manager import ProjectLiteratureManager
 
 # 初始化日志
@@ -19,29 +24,33 @@ logger = setup_logging(
     level=config.get('logging.level')
 )
 
-def main(project_name=None, literature_txt_path=None, pdf_folder_path=None, extra_idea=None):
+def main(project_name=None, literature_txt_path=None, extra_idea=None, outline_data=None, progress_callback=None):
     """
     主函数
     
     Args:
-        project_name: 项目名称
+        project_name: 项目名称/论文题目
         literature_txt_path: 文献池路径（可选）
-        pdf_folder_path: PDF文件夹路径（可选）
         extra_idea: 项目核心思路/关键词（可选）
+        outline_data: 用户编辑后的大纲数据（可选）
+        progress_callback: 进度回调函数（可选），签名: (progress, stage, word_count, api_calls)
     """
+    # 辅助函数：发送进度
+    def report_progress(pct, stage, word_count=None, api_calls=None):
+        if progress_callback:
+            try:
+                progress_callback(pct, stage, word_count, api_calls)
+            except Exception:
+                pass  # 忽略回调错误
     try:
         logger.info("="*60)
-        logger.info("自动化论文生成系统启动（含专家审稿）")
+        logger.info("自动化论文生成系统启动（重构版）")
         logger.info("="*60)
         
-        # 0. 项目管理 - 修正逻辑：如果项目已存在（通过project_name传入的是ID或项目目录已建），则复用
-        # 但此处我们做一个简单假设：如果project_name匹配特定ID格式，则查找；否则新建
-        # 为了兼容API的调用，API应负责管理ID传递
-        
+        # 0. 项目路径设置
         project_path = None
-        
-        # 简单检查：project_name是否看起来像ID
         is_existing_id = False
+        
         if project_name and os.path.exists(os.path.join(config.get('literature.projects_base_dir'), project_name)):
             is_existing_id = True
             project_path = os.path.join(config.get('literature.projects_base_dir'), project_name)
@@ -49,97 +58,86 @@ def main(project_name=None, literature_txt_path=None, pdf_folder_path=None, extr
         
         # 路径解析优先级：传入参数 > 项目文件夹推断 > 默认配置
         if literature_txt_path:
-            # 最高优先级：明确传入的路径
             lit_pool_path = literature_txt_path
         elif project_path:
-            # 次优先级：从现有项目推断
             lit_pool_path = os.path.join(project_path, "literature", "literature_pool.txt")
         else:
-            # 兜底：使用默认配置
             lit_pool_path = config.get('literature.pool_path')
         
-        if pdf_folder_path:
-            pdf_folder = pdf_folder_path
-        elif project_path:
-            pdf_folder = os.path.join(project_path, "pdfs")
-        else:
-            pdf_folder = config.get('reference_documents.pdf_folder')
-        
         if project_path:
-            # 过程数据：在项目文件夹下
             process_data_folder = project_path
         else:
-            process_data_folder = "data/temp"
+            # 为每个项目创建唯一目录
+            safe_name = re.sub(r'[<>:"/\\|?*]', '', project_name or 'unnamed').strip()
+            process_data_folder = os.path.join("data", "projects", safe_name)
+            os.makedirs(process_data_folder, exist_ok=True)
+            
+        # 创建sections目录用于存储分章节MD
+        sections_folder = os.path.join(process_data_folder, "sections", "v1")
+        os.makedirs(sections_folder, exist_ok=True)
             
         # 最终成果：在根目录 output 文件夹下
         output_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
         os.makedirs(output_folder, exist_ok=True)
         logger.info(f"最终输出目录: {output_folder}")
+        logger.info(f"章节文件目录: {sections_folder}")
         
         # 1. 加载文献池
         logger.info(f"步骤1: 加载文献池: {lit_pool_path}")
         parser = LiteratureParser()
         literature_pool = parser.parse_txt_pool(lit_pool_path)
         logger.info(f"文献池加载完成: {len(literature_pool)} 条文献")
+        report_progress(15, "构建语义检索引擎")
         
         # 2. 构建语义检索引擎
         logger.info("步骤2: 构建语义检索引擎...")
         retriever = SemanticRetriever(literature_pool)
+        report_progress(20, "初始化大模型路由")
         
-        # 3. 加载PDF参考文档（如果启用）
-        pdf_ref_mgr = None
-        if config.get('reference_documents.enabled', False):
-            logger.info(f"步骤3: 加载PDF参考文档: {pdf_folder}")
-            pdf_ref_mgr = PDFReferenceManager(pdf_folder)
-            logger.info(f"PDF参考文档加载完成: {len(pdf_ref_mgr.documents)} 个文件")
-        else:
-            logger.info("步骤3: PDF参考功能未启用，跳过")
-        
-        # 4. 初始化大模型路由
-        logger.info("步骤4: 初始化大模型路由...")
+        # 3. 初始化大模型路由
+        logger.info("步骤3: 初始化大模型路由...")
         router = ModelRouter(config)
         
-        # 5. 初始化引用管理器
-        logger.info("步骤5: 初始化引用管理器...")
-        citation_mgr = CitationManager(literature_pool, retriever, config)
+        # 4. 初始化引用管理器
+        logger.info("步骤4: 初始化引用管理器...")
+        citation_mgr = CitationManager(literature_pool, retriever, config, model_router=router)
         
-        # 6. 准备项目上下文
-        project_title = config.get('project.title')
-        if is_existing_id:
-            # 尝试从目录名中提取真实标题（如果需要），或者就用项目ID
-            # 更好的做法是在项目目录存一个meta.json，但为了简化，我们这里如果传了extra_idea就用它
-            pass
-        
-        if project_name and not is_existing_id:
-             project_title = project_name
-             
-        project_keywords = config.get('project.keywords')
-        
-        # 构建上下文
-        idea_content = extra_idea if extra_idea else project_keywords
-        
-        # 4. 初始化模板引擎
-        logger.info("步骤6: 加载模板...")
-        
-        # 将过程文件夹加入上下文，供中间保存使用
+        # 5. 准备项目上下文
         project_context = {
             'title': project_name,
             'keywords': config.get('project.keywords', ''),
             'extra_idea': extra_idea,
-            'output_folder': process_data_folder  # ⭐ 过程文件（分章节MD）保存在Data项目文件夹
+            'output_folder': process_data_folder,
+            'sections_folder': sections_folder,
+            'outline_data': outline_data  # 传递用户编辑的大纲
         }
         
+        # 6. 初始化模板引擎
+        logger.info("步骤5: 加载模板...")
         engine = TemplateEngine(
             template_path=config.get('template.path'),
             model_router=router,
             citation_manager=citation_mgr,
             project_context=project_context,
-            pdf_reference_mgr=pdf_ref_mgr,
             config=config
         )
+        report_progress(25, "生成论文初稿")
         
-        logger.info("步骤7: 生成论文初稿...")
-        paper_draft = engine.generate_paper()
+        # 7. 生成论文初稿
+        logger.info("步骤6: 生成论文初稿...")
+        paper_draft = engine.generate_paper(progress_callback=progress_callback)
+        
+        # 强制添加标题
+        if not paper_draft.strip().startswith('# '):
+            paper_draft = f"# {project_name}\n\n{paper_draft}"
+
+        # 保存初稿
+        safe_filename = re.sub(r'[<>:"/\\|?*]', '', project_name).strip()
+        output_path_draft = os.path.join(output_folder, f'{safe_filename}_初稿版.md')
+        with open(output_path_draft, 'w', encoding='utf-8') as f:
+            f.write(paper_draft)
+        logger.info(f"初稿版已保存: {output_path_draft}")
+        report_progress(70, "专家审稿优化", word_count=len(paper_draft))
         
         # 8. 专家审稿与优化（如果启用）
         final_paper = paper_draft
@@ -147,15 +145,20 @@ def main(project_name=None, literature_txt_path=None, pdf_folder_path=None, extr
         
         if config.get('expert_review.enabled', False):
             logger.info("\n" + "="*60)
-            logger.info("步骤8: 专家审稿系统介入...")
-            expert_system = ExpertReviewSystem(router, output_dir=process_data_folder, external_search=engine.external_search)
+            logger.info("步骤7: 专家审稿系统介入...")
+            expert_system = ExpertReviewSystem(
+                router,
+                output_dir=process_data_folder,
+                web_search=engine.web_search,
+                max_rounds=config.get('expert_review.max_rounds', 3),
+                target_score=config.get('expert_review.target_score', 80)
+            )
             review_results = expert_system.review_and_optimize_iteratively(paper_draft)
             
             final_paper = review_results['final_paper']
             
-            # 保存审稿报告（所有轮次）- 放在项目文件夹内
+            # 保存审稿报告
             review_report_path = os.path.join(process_data_folder, '审稿报告.json')
-            
             with open(review_report_path, 'w', encoding='utf-8') as f:
                 json.dump({
                     'rounds': review_results['rounds'],
@@ -167,101 +170,103 @@ def main(project_name=None, literature_txt_path=None, pdf_folder_path=None, extr
             logger.info(f"优化轮次: {review_results['rounds']} 轮")
             logger.info(f"最终评分: {review_results['final_score']}/100")
         else:
-            logger.info("步骤8: 专家审稿未启用，跳过")
+            logger.info("步骤7: 专家审稿未启用，跳过")
         
-        # 9. 保存优化版论文 (V1 - 未扩写)
-        safe_filename = "".join([c for c in project_name if c.isalnum() or c in (' ', '-', '_', '\u4e00-\u9fa5')]).strip()
-        output_path_v1 = os.path.join(output_folder, f'{safe_filename}_标准优化版.md')
+        # 9. V2: 逐章节优化（清理AI痕迹）- 标准版
+        logger.info("\n" + "="*60)
+        logger.info("步骤8: 生成标准版（清理AI痕迹、规范正文）...")
+        optimized_paper = engine.optimize_paper_sections(final_paper)
+        report_progress(85, "生成扩写版", word_count=len(optimized_paper))
         
-        logger.info(f"步骤9: 保存标准优化版到 {output_path_v1}...")
+        # 保存标准版MD
+        output_path_std = os.path.join(output_folder, f'{safe_filename}_标准版.md')
+        with open(output_path_std, 'w', encoding='utf-8') as f:
+            f.write(optimized_paper)
         
-        with open(output_path_v1, 'w', encoding='utf-8') as f:
-            f.write(final_paper)
-            
-        # 导出Word (V1)
+        # 导出标准版Word
+        docx_path_std = os.path.join(output_folder, f'{safe_filename}_标准版.docx')
         try:
             from core.docx_exporter import convert_markdown_to_docx
-            docx_path_v1 = os.path.join(output_folder, f'{safe_filename}_标准优化版.docx')
-            convert_markdown_to_docx(final_paper, docx_path_v1)
-            logger.info(f"Word文档(标准版)已导出: {docx_path_v1}")
+            convert_markdown_to_docx(optimized_paper, docx_path_std)
+            logger.info(f"标准版Word已导出: {docx_path_std}")
         except Exception as e:
-            logger.error(f"导出Word文档失败: {str(e)}")
+            logger.error(f"导出标准版Word失败: {str(e)}")
+            docx_path_std = output_path_std
 
-        # 10. 执行终极扩写 (V2)
+        # 10. V3: 逐章节扩写 - 扩写版
         logger.info("\n" + "="*60)
-        logger.info("步骤10: 执行终极扩写 (目标：内容深度翻倍)...")
-        expanded_paper = engine.expand_full_paper_content(final_paper)
+        logger.info("步骤9: 生成扩写版（内容丰富化）...")
+        expanded_paper = engine.expand_paper_sections(optimized_paper)
         
-        # 保存扩写版 (V2)
-        output_path_v2 = os.path.join(output_folder, f'{safe_filename}_深度扩写版.md')
-        logger.info(f"保存深度扩写版到 {output_path_v2}...")
-        
-        with open(output_path_v2, 'w', encoding='utf-8') as f:
+        # 保存扩写版MD
+        output_path_exp = os.path.join(output_folder, f'{safe_filename}_扩写版.md')
+        with open(output_path_exp, 'w', encoding='utf-8') as f:
             f.write(expanded_paper)
-            
-        # 导出Word (V2)
-        try:
-            docx_path_v2 = os.path.join(output_folder, f'{safe_filename}_深度扩写版.docx')
-            convert_markdown_to_docx(expanded_paper, docx_path_v2)
-            logger.info(f"Word文档(扩写版)已导出: {docx_path_v2}")
-        except Exception as e:
-            logger.error(f"导出Word文档失败: {str(e)}")
         
-        # 11. 生成质量报告 (基于扩写版)
+        # 导出扩写版Word
+        docx_path_exp = os.path.join(output_folder, f'{safe_filename}_扩写版.docx')
+        try:
+            convert_markdown_to_docx(expanded_paper, docx_path_exp)
+            logger.info(f"扩写版Word已导出: {docx_path_exp}")
+        except Exception as e:
+            logger.error(f"导出扩写版Word失败: {str(e)}")
+            docx_path_exp = output_path_exp
+        
+        report_progress(95, "生成质量报告", word_count=len(expanded_paper))
+        
+        # 11. 生成质量报告
         if config.get('quality_metrics.enabled'):
             stats = citation_mgr.get_statistics()
-            stats['output_file'] = output_path_v2
-            stats['word_count_v1'] = len(final_paper)
-            stats['word_count_v2'] = len(expanded_paper)
+            stats['output_file'] = output_path_exp
+            stats['word_count_draft'] = len(paper_draft)
+            stats['word_count_std'] = len(optimized_paper)
+            stats['word_count_exp'] = len(expanded_paper)
             stats['expert_review_enabled'] = config.get('expert_review.enabled', False)
-            stats['pdf_reference_enabled'] = config.get('reference_documents.enabled', False)
-            stats['project_path'] = project_path if project_path else "传统模式"
-            
-            if pdf_ref_mgr:
-                stats['pdf_documents_count'] = len(pdf_ref_mgr.documents)
+            stats['project_path'] = process_data_folder
             
             report_path = os.path.join(output_folder, 'quality_report.json')
             with open(report_path, 'w', encoding='utf-8') as f:
                 json.dump(stats, f, ensure_ascii=False, indent=2)
             
             logger.info(f"质量报告已生成: {report_path}")
-            logger.info(f"标准版字数: {stats['word_count_v1']}")
-            logger.info(f"扩写版字数: {stats['word_count_v2']}")
-            logger.info(f"总引用数: {stats['total_citations']}")
         
         logger.info("="*60)
         logger.info("论文生成全流程完成!")
-        logger.info(f"V1 输出: {output_path_v1}")
-        logger.info(f"V2 输出: {output_path_v2}")
-        if project_path:
-            logger.info(f"项目路径: {project_path}")
+        logger.info(f"标准版: {docx_path_std}")
+        logger.info(f"扩写版: {docx_path_exp}")
         logger.info("="*60)
         
         return {
-            'v1': output_path_v1,
-            'v2': output_path_v2
+            'success': True,
+            '标准版': docx_path_std,
+            '扩写版': docx_path_exp,
+            'output_folder': output_folder,
+            'message': '论文生成全流程完成'
         }
         
     except KeyboardInterrupt:
         logger.info("用户中断程序")
-        sys.exit(0)
+        return {
+            'success': False,
+            'error': '用户中断程序',
+            'cancelled': True
+        }
     except Exception as e:
         logger.error(f"程序执行出错: {str(e)}", exc_info=True)
-        sys.exit(1)
+        raise e
 
 if __name__ == "__main__":
-    # 命令行模式：可以通过参数指定项目信息
     import argparse
     
     parser = argparse.ArgumentParser(description='自动化论文生成')
     parser.add_argument('--project', type=str, help='项目名称')
     parser.add_argument('--literature', type=str, help='文献池TXT文件路径')
-    parser.add_argument('--pdfs', type=str, help='PDF文件夹路径')
+    parser.add_argument('--idea', type=str, help='核心思路')
     
     args = parser.parse_args()
     
     main(
         project_name=args.project,
         literature_txt_path=args.literature,
-        pdf_folder_path=args.pdfs
+        extra_idea=args.idea
     )

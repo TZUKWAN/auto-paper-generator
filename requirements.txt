@@ -22,9 +22,13 @@ python-docx
 markdown
 PyPDF2  # PDF解析
 
-# Web API（可选）
-flask
-flask-cors
+# GUI Interface (Native)
+wxPython>=4.2.0
+
+# 网络检索
+playwright
+beautifulsoup4
+httpx
 
 # 工具库
 tqdm

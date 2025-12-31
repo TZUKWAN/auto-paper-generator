@@ -4,8 +4,7 @@ __pycache__/
 *.log
 logs/
 temp_uploads/
-output/
-data/projects/
+
 .env
 venv/
 .idea/

@@ -1,6 +1,8 @@
 """日志工具"""
 import logging
 import os
+import sys
+import io
 from datetime import datetime
 
 def setup_logging(log_path="logs/generation.log", level="INFO"):
@@ -18,14 +20,29 @@ def setup_logging(log_path="logs/generation.log", level="INFO"):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     log_file = log_path.replace('.log', f'_{timestamp}.log')
     
+    handlers = [
+        logging.FileHandler(log_file, encoding='utf-8')
+    ]
+
+    # Only add stream handler if stdout is available (not None)
+    if sys.stdout is not None:
+        try:
+            # Create UTF-8 safe stream handler
+            if hasattr(sys.stdout, 'buffer'):
+                stream = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+            else:
+                stream = sys.stdout
+            
+            stream_handler = logging.StreamHandler(stream=stream)
+            handlers.append(stream_handler)
+        except Exception:
+            pass # Ignore stream errors in restricted environments
+
     # 配置日志
     logging.basicConfig(
         level=getattr(logging, level.upper()),
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_file, encoding='utf-8'),
-            logging.StreamHandler()
-        ]
+        handlers=handlers
     )
     
     logger = logging.getLogger(__name__)

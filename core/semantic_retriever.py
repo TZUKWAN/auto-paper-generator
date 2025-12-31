@@ -55,7 +55,7 @@ class SemanticRetriever:
         
         logger.info(f"FAISS索引构建完成，维度: {dimension}")
     
-    def search(self, query, top_k=5, threshold=0.2):
+    def search(self, query, top_k=5, threshold=0.05):
         """
         语义检索
         
@@ -68,6 +68,7 @@ class SemanticRetriever:
             结果列表，每个结果包含 literature, similarity, index
         """
         if not self.index or not self.pool:
+            logger.warning("语义检索跳过: 索引或文献池为空")
             return []
 
         # 生成查询嵌入
@@ -79,15 +80,78 @@ class SemanticRetriever:
         
         # 过滤：未使用 + 超过阈值
         results = []
+        skipped_used = 0
+        skipped_threshold = 0
         for dist, idx in zip(distances[0], indices[0]):
-            if dist >= threshold and not self.pool[idx]['used']:
-                results.append({
-                    'literature': self.pool[idx],
-                    'similarity': float(dist),
-                    'index': int(idx)
-                })
+            if self.pool[idx]['used']:
+                skipped_used += 1
+                continue
+            if dist < threshold:
+                skipped_threshold += 1
+                continue
+            results.append({
+                'literature': self.pool[idx],
+                'similarity': float(dist),
+                'index': int(idx)
+            })
         
-        logger.debug(f"检索到 {len(results)} 条相关文献（阈值: {threshold}）")
+        # [*] 如果严格过滤后无结果，降低标准重试（模糊匹配）
+        if not results and indices[0].size > 0:
+            logger.info(f"严格检索无结果，使用模糊匹配模式")
+            # 选择相似度最高的未使用文献，无论阈值
+            for dist, idx in zip(distances[0], indices[0]):
+                if not self.pool[idx]['used']:
+                    results.append({
+                        'literature': self.pool[idx],
+                        'similarity': float(dist),
+                        'index': int(idx)
+                    })
+                    break  # 只取一个
+        
+        if results:
+            logger.debug(f"检索到 {len(results)} 条文献 (跳过已用{skipped_used}, 低相似{skipped_threshold})")
+        else:
+            logger.warning(f"查询'{query[:30]}...'无检索结果 (已用{skipped_used}, 低相似{skipped_threshold})")
+        
+        return results
+    
+    def get_raw_candidates(self, query, top_k=10):
+        """
+        获取原始候选文献（不应用阈值过滤，仅过滤已使用）
+        
+        用于LLM筛选，返回足够多的候选让AI选择
+        
+        Args:
+            query: 查询文本
+            top_k: 返回前k个结果
+            
+        Returns:
+            未使用的候选文献列表，包含 literature, similarity, index
+        """
+        if not self.index or not self.pool:
+            logger.warning("语义检索跳过: 索引或文献池为空")
+            return []
+        
+        # 生成查询嵌入
+        query_embedding = self.model.encode([query])
+        faiss.normalize_L2(query_embedding)
+        
+        # 检索更多以确保有足够的未使用文献
+        distances, indices = self.index.search(query_embedding, min(top_k * 2, len(self.pool)))
+        
+        results = []
+        for dist, idx in zip(distances[0], indices[0]):
+            if self.pool[idx]['used']:
+                continue
+            results.append({
+                'literature': self.pool[idx],
+                'similarity': float(dist),
+                'index': int(idx)
+            })
+            if len(results) >= top_k:
+                break
+        
+        logger.debug(f"获取原始候选文献: {len(results)} 条 (查询: '{query[:30]}...')")
         return results
     
     def get_unused_count(self):
